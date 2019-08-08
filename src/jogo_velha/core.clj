@@ -1,6 +1,6 @@
 (ns jogo-velha.core)
 
-(defn new-board
+(defn initial-board
   [nx]
   (as-> (range nx) result
         (map (fn [x]
@@ -8,53 +8,73 @@
              result)
         (apply vector result)))
 
-(defn diagonal-win?
-  [board]
-  (loop [size (count board)]
-    (when (>= size 0)
-      (recur ()))))
+(defn transpose [matrix]
+  (apply map vector matrix))
 
-(defn transversal-win?
-  [board start stop interact]
-  (loop [c start]
-    (if (= c stop)
-      c
-      (do
-          (recur (interact c)))
-      )
-    )
-  )
+(defn horizontal-win? [board]
+  (->> board
+       (map (fn [row] (reduce conj #{} row)))
+       (some #(and (= (count %)1) (not (nil? (first %)))))
+       ))
 
-(defn coord-free?
-  [x y board]
-  (as-> (get-in board [x y]) result
-        (contains? #{"x" "o"} result)
-        (not result)))
+(defn straight-win? [board]
+  (or (horizontal-win? board)
+      (horizontal-win? (transpose board))))
 
-(defn play
-  [x y board player]
-  (if (coord-free? x y board)
-    (assoc-in board [x y] player)
-    (println "Posição já utilizada")))
+(defn traverse-win? [board]
+  (loop [x 0
+         y 0
+         values #{}]
+    (if (< x (count board))
+      (recur (inc x) (inc y) (conj values (get-in board [x y])))
+      (and (= (count values) 1) (not (nil? (first values)))))))
 
-(defn row-win?
-  [board-row]
-  (-> (set board-row)
-      (count)
-      (= 1)))
+(defn diagonal-win? [board]
+  (or (traverse-win? board)
+      (traverse-win? (reverse board))))
 
-(defn horizontal-win?
-  [board]
-  (some row-win? board))
 
-(defn vertical-win?
-  [board]
-  (horizontal-win? (apply mapv vector board)))
+(defn win? [board]
+  (or (diagonal-win? board)
+      (straight-win? board)))
 
-(defn winner?
-  [board]
-  (if (horizontal-win? board)
-    (println "Winner!!!")
+
+(defn valid-move? [x y board]
+  (nil? (get-in board [x y])))
+
+
+(defn play? [x y board marker]
+  (if (valid-move? x y board)
+    (assoc-in board [x y] marker)
     false))
 
-(transversal-win? (new-board 3) 0 2 inc)
+(defn get-mark [round]
+  (if (even? round)
+    "X"
+    "O"))
+
+(defn get-input []
+  (as->(read-line) rl
+       {:x (Character/digit (first rl) 10)
+        :y (Character/digit (second rl) 10)}))
+
+
+
+(defn wait-move! [board round]
+  (loop [r false]
+    (if r
+      r
+      (let [input (get-input)]
+        (recur (play? (:x input) (:y input) board (get-mark round)))))))
+
+(defn start-game [size]
+  (loop [board (initial-board size)
+         round 0]
+    (println board)
+    (let [new-board (wait-move! board round)]
+
+      (if (win? new-board)
+        (do (println "GAME-OVER" (get-mark round) "WON")
+            new-board)
+        (recur new-board (inc round))))))
+
